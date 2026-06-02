@@ -1632,7 +1632,7 @@ Function InstallUpdates ([xml]$xmlInput)
         }
     }
     # Get all CUs except the March 2013 PU for SharePoint / Project Server 2013 and the June 2013 CU for SharePoint 2010
-    $cumulativeUpdates = Get-ChildItem -Path "$env:bits\$spYear\Updates" -Include office2010*.exe, ubersrv*.exe, ubersts*.exe, *pjsrv*.exe, sharepointsp2013*.exe, coreserver201*.exe, sts201*.exe, wssloc201*.exe, svrproofloc201*.exe -Recurse -ErrorAction SilentlyContinue | Where-Object {$_ -notlike "*ubersrvsp2013-kb2767999-fullfile-x64-glb.exe" -and $_ -notlike "*ubersrvprjsp2013-kb2768001-fullfile-x64-glb.exe" -and $_ -notlike "*ubersrv2010-kb2817527-fullfile-x64-glb.exe"} | Sort-Object -Descending
+    $cumulativeUpdates = Get-ChildItem -Path "$env:bits\$spYear\Updates" -Include office2010*.exe, ubersrv*.exe, ubersts*.exe, uber-subscription*.exe, *pjsrv*.exe, sharepointsp2013*.exe, coreserver201*.exe, sts201*.exe, wssloc201*.exe, svrproofloc201*.exe -Recurse -ErrorAction SilentlyContinue | Where-Object {$_ -notlike "*ubersrvsp2013-kb2767999-fullfile-x64-glb.exe" -and $_ -notlike "*ubersrvprjsp2013-kb2768001-fullfile-x64-glb.exe" -and $_ -notlike "*ubersrv2010-kb2817527-fullfile-x64-glb.exe"} | Sort-Object -Descending
     # Filter out Project Server updates if we aren't installing Project Server
     if ($xmlInput.Configuration.ProjectServer.Install -ne $true)
     {
@@ -1994,13 +1994,19 @@ Function CreateOrJoinFarm ([xml]$xmlInput, [System.Security.SecureString]$secPhr
         }
 
         Write-Host -ForegroundColor White " - Attempting to join farm on `"$configDB`"..."
-        Connect-SPConfigurationDatabase -DatabaseName "$configDB" -Passphrase $secPhrase -DatabaseServer "$dbServer" @distCacheSwitch @serverRoleSwitch @databaseCredentialsParameter -ErrorAction SilentlyContinue
+        if($spYear -eq "SE") {
+            $databaseConnectionEncryption = @{DatabaseConnectionEncryption = "Mandatory"}
+        }
+        else{
+            $databaseConnectionEncryption = @{}
+        }
+        Connect-SPConfigurationDatabase -DatabaseName "$configDB" -Passphrase $secPhrase -DatabaseServer "$dbServer" @databaseConnectionEncryption @distCacheSwitch @serverRoleSwitch @databaseCredentialsParameter -ErrorAction SilentlyContinue
         If (-not $?)
         {
             Write-Host -ForegroundColor White " - No existing farm found.`n - Creating config database `"$configDB`"..."
             # Waiting a few seconds seems to help with the Connect-SPConfigurationDatabase barging in on the New-SPConfigurationDatabase command; not sure why...
             Start-Sleep 5
-            New-SPConfigurationDatabase -DatabaseName "$configDB" -DatabaseServer "$dbServer" -AdministrationContentDatabaseName "$centralAdminContentDB" -Passphrase $secPhrase -FarmCredentials $farmCredential @distCacheSwitch @serverRoleSwitch @serverRoleOptionalSwitch @databaseCredentialsParameter
+            New-SPConfigurationDatabase -DatabaseName "$configDB" -DatabaseServer "$dbServer" -AdministrationContentDatabaseName "$centralAdminContentDB" -Passphrase $secPhrase -FarmCredentials $farmCredential @databaseConnectionEncryption @distCacheSwitch @serverRoleSwitch @serverRoleOptionalSwitch @databaseCredentialsParameter
             If (-not $?)
             {
                 Throw " - Error creating new farm configuration database"
